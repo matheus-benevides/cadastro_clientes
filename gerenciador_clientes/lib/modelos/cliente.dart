@@ -1,22 +1,18 @@
 // Importe necessário do Material App
 import 'package:flutter/material.dart';
 
-class Cliente{
+class Cliente {
   final String nome;
   final String email;
   final String senha;
 
   // Construtor do cliente
 
-  Cliente({
-    required this.nome,
-    required this.email,
-    required this.senha,
-  });
+  Cliente({required this.nome, required this.email, required this.senha});
 
   @override
-  String toString(){
-    return 'Cliente: $nome, Email; $email';
+  String toString() {
+    return 'Cliente: $nome, Email: $email';
   }
 }
 
@@ -32,9 +28,11 @@ class GerenciadorClientes {
   // Para acessar a lista de clientes (retorna uma cópia imutável)
   List<Cliente> get clientes => List.unmodifiable(_clientes);
   // Tentar cadastrar um cliente novo.
-  bool cadastrar(Cliente cliente){
+  bool cadastrar(Cliente cliente) {
     //Vamos checar se já existe um email cadastrado
-    if(_clientes.any((c) =>  c.email.toLowerCase() == cliente.email.toLowerCase())){
+    if (_clientes.any(
+      (c) => c.email.toLowerCase() == cliente.email.toLowerCase(),
+    )) {
       print('Erro: email ${cliente.email} já cadastrado');
       return false; // Cadastro falhou
     }
@@ -43,7 +41,7 @@ class GerenciadorClientes {
     return true; // Cadastrooouuuuuuu
   }
 
-  Cliente ? login(String email, String senha){
+  Cliente? login(String email, String senha) {
     return _clientes.firstWhere(
       // É uma função anônima
       // O c representa cada elemento(cada cliente) da lista_clientes
