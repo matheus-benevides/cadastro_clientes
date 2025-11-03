@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "820779280487",
+    "project_id": "matheus-gerenciadorclientes",
+    "storage_bucket": "matheus-gerenciadorclientes.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:820779280487:android:e955234f66f2410c360cc2",
+        "android_client_info": {
+          "package_name": "com.example.gerenciador_clientes"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCOjrzqzcStgx_pV6EZT0Z0NAq4nB4JJNM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

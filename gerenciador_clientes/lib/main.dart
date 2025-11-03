@@ -1,21 +1,28 @@
-import 'package:flutter/material.dart'; // Importe necesário
-import 'package:gerenciador_clientes/modelos/cliente.dart'; // Importa nosso modelo de BD
+import 'package:flutter/material.dart';
+import 'modelos/cliente.dart'; // Importa o modelo.
+import 'package:firebase_core/firebase_core.dart'; // NOVO: Para iniciar o Firebase.
 
+// NOVO: Importe o arquivo de opções do seu projeto gerado pelo FlutterFire CLI
+import 'firebase_options.dart';
 
-final GerenciadorClientes gerenciadorClientes = GerenciadorClientes(); // Instanciamos nosso BD
+// NOVO: Substituímos o GerenciadorClientes pelo ServicoClientes.
+final ServicoClientes servicoClientes = ServicoClientes();
 
-void main (){
-  gerenciadorClientes.cadastrar(
-    Cliente(nome: "Admin", email: "admin@admin.com", senha: "admin123") // Coloquei o 123 para conseguir logar :D
-  );
+// A função main agora é assíncrona para inicializar o Firebase.
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized(); // Garante que o Flutter está pronto.
+
+  // Inicializa o Firebase (OBRIGATÓRIO).
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+
   runApp(const AplicativoClientes());
 }
 
-class AplicativoClientes extends StatelessWidget{
+class AplicativoClientes extends StatelessWidget {
   const AplicativoClientes({super.key});
 
   @override
-  Widget build(BuildContext context){
+  Widget build(BuildContext context) {
     return MaterialApp(
       title: "Sistema de Cliente",
       debugShowCheckedModeBanner: false, // Tira a faixa de Debug
@@ -59,6 +66,7 @@ class TelaPrincipal extends StatelessWidget {
           ),
         ],
       ),
+
       body: Center(
         child: Padding(
           padding: const EdgeInsets.all(16.0),
@@ -91,19 +99,40 @@ class TelaPrincipal extends StatelessWidget {
               ),
               const SizedBox(height: 10),
               // Lista de Clientes Cadastrados
-              Expanded(
-                // Usa o getter 'clientes' do nosso gerenciador.
-                child: ListView.builder(
-                  itemCount: gerenciadorClientes.clientes.length,
-                  itemBuilder: (context, index) {
-                    final c = gerenciadorClientes.clientes[index];
-                    return ListTile(
-                      leading: const Icon(Icons.person),
-                      title: Text(c.nome),
-                      subtitle: Text(c.email),
-                    );
-                  },
-                ),
+              
+              // NOVO: StreamBuilder para atualizar a lista em tempo real
+              StreamBuilder<List<Cliente>>(
+                // Conecta ao Stream de clientes do nosso serviço Firebase.
+                stream: servicoClientes.clientesStream,
+                builder: (context, snapshot) {
+                  // 1. Se houver erro.
+                  if (snapshot.hasError) {
+                    return const Text('Erro ao carregar clientes.');
+                  }
+
+                  // 2. Se estiver carregando.
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+
+                  // 3. Se os dados estiverem prontos.
+                  final clientes =
+                      snapshot.data ?? []; // Pega a lista de clientes.
+
+                  return Expanded(
+                    child: ListView.builder(
+                      itemCount: clientes.length,
+                      itemBuilder: (context, index) {
+                        final c = clientes[index];
+                        return ListTile(
+                          leading: const Icon(Icons.person),
+                          title: Text(c.nome),
+                          subtitle: Text(c.email),
+                        );
+                      },
+                    ),
+                  );
+                },
               ),
             ],
           ),
@@ -112,8 +141,6 @@ class TelaPrincipal extends StatelessWidget {
     );
   }
 }
-
-// lib/main.dart (CLASSE TELA CADASTRO COMPLETA)
 
 class TelaCadastro extends StatefulWidget {
   const TelaCadastro({super.key});
@@ -129,23 +156,28 @@ class _EstadoTelaCadastro extends State<TelaCadastro> {
   final _senhaController = TextEditingController();
   String _mensagemErro = '';
 
-  void _fazerCadastro() {
-    if (_chaveForm.currentState!.validate()) { // Se a validação dos campos for OK...
+  void _fazerCadastro() async {
+    // AGORA É ASYNC
+    if (_chaveForm.currentState!.validate()) {
+      setState(() => _mensagemErro = '');
+
       final novoCliente = Cliente(
         nome: _nomeController.text.trim(),
         email: _emailController.text.trim(),
         senha: _senhaController.text,
       );
 
-      // Tenta cadastrar no BD simulado.
-      final sucesso = gerenciadorClientes.cadastrar(novoCliente);
+      // CHAMA O SERVIÇO FIREBASE e AGUARDA O RESULTADO
+      final sucesso = await servicoClientes.cadastrar(
+        novoCliente,
+      ); // <-- AWAIT AQUI!
 
       if (sucesso) {
-        // Se sucesso: exibe uma notificação e volta para a tela de Login.
+        // Se sucesso: exibe mensagem e volta para a tela de Login.
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('✅ Cadastro realizado com sucesso!')),
         );
-        Navigator.pop(context); // Volta para a TelaLogin.
+        Navigator.pop(context);
       } else {
         // Se falhar (e-mail duplicado).
         setState(() {
@@ -166,42 +198,71 @@ class _EstadoTelaCadastro extends State<TelaCadastro> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: <Widget>[
-              const Text('Crie sua conta', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+              const Text(
+                'Crie sua conta',
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+              ),
               const SizedBox(height: 20),
               // Campo Nome
               TextFormField(
                 controller: _nomeController,
-                decoration: const InputDecoration(labelText: 'Nome Completo', border: OutlineInputBorder(), prefixIcon: Icon(Icons.person)),
-                validator: (valor) => (valor == null || valor.isEmpty) ? 'Campo obrigatório.' : null,
+                decoration: const InputDecoration(
+                  labelText: 'Nome Completo',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.person),
+                ),
+                validator: (valor) => (valor == null || valor.isEmpty)
+                    ? 'Campo obrigatório.'
+                    : null,
               ),
               const SizedBox(height: 16),
               // Campo E-mail
               TextFormField(
                 controller: _emailController,
-                decoration: const InputDecoration(labelText: 'E-mail', border: OutlineInputBorder(), prefixIcon: Icon(Icons.email)),
-                validator: (valor) => (valor == null || !valor.contains('@')) ? 'E-mail inválido.' : null,
+                decoration: const InputDecoration(
+                  labelText: 'E-mail',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.email),
+                ),
+                validator: (valor) => (valor == null || !valor.contains('@'))
+                    ? 'E-mail inválido.'
+                    : null,
               ),
               const SizedBox(height: 16),
               // Campo Senha
               TextFormField(
                 controller: _senhaController,
                 obscureText: true,
-                decoration: const InputDecoration(labelText: 'Senha', border: OutlineInputBorder(), prefixIcon: Icon(Icons.lock)),
-                validator: (valor) => (valor == null || valor.length < 6) ? 'A senha deve ter 6+ caracteres.' : null,
+                decoration: const InputDecoration(
+                  labelText: 'Senha',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.lock),
+                ),
+                validator: (valor) => (valor == null || valor.length < 6)
+                    ? 'A senha deve ter 6+ caracteres.'
+                    : null,
               ),
               const SizedBox(height: 20),
               // Mensagem de Erro
               if (_mensagemErro.isNotEmpty)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 10),
-                  child: Text(_mensagemErro, style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+                  child: Text(
+                    _mensagemErro,
+                    style: const TextStyle(
+                      color: Colors.red,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ),
               // Botão de Cadastro
               ElevatedButton.icon(
                 onPressed: _fazerCadastro,
                 icon: const Icon(Icons.app_registration),
                 label: const Text('Cadastrar'),
-                style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 50)),
+                style: ElevatedButton.styleFrom(
+                  minimumSize: const Size(double.infinity, 50),
+                ),
               ),
             ],
           ),
@@ -209,6 +270,7 @@ class _EstadoTelaCadastro extends State<TelaCadastro> {
       ),
     );
   }
+
   // BOA PRÁTICA: Liberar os controladores quando o widget for removido
   @override
   void dispose() {
@@ -234,19 +296,24 @@ class _EstadoTelaLogin extends State<TelaLogin> {
   final _senhaController = TextEditingController();
   String _mensagemErro = '';
 
-  void _fazerLogin() {
-    // 1. Validação dos campos
+  void _fazerLogin() async {
+    // AGORA É ASYNC
+    // Valida os campos... (código omitido, mas continua o mesmo)
+
     if (_chaveForm.currentState!.validate()) {
-      setState(() => _mensagemErro = ''); // Limpa erro.
+      setState(() => _mensagemErro = '');
 
       final email = _emailController.text.trim();
       final senha = _senhaController.text;
 
-      // 2. Chama o método 'login' do nosso BD simulado.
-      final clienteLogado = gerenciadorClientes.login(email, senha);
+      // CHAMA O SERVIÇO FIREBASE e AGUARDA O RESULTADO
+      final clienteLogado = await servicoClientes.login(
+        email,
+        senha,
+      ); // <-- AWAIT AQUI!
 
       if (clienteLogado != null) {
-        // 3. Login de sucesso: Navega para a tela principal (substituindo o Login).
+        // Se sucesso, navega...
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
@@ -254,7 +321,7 @@ class _EstadoTelaLogin extends State<TelaLogin> {
           ),
         );
       } else {
-        // 4. Login falhou.
+        // Login falhou...
         setState(() {
           _mensagemErro = 'E-mail ou senha incorretos.';
         });
@@ -273,7 +340,10 @@ class _EstadoTelaLogin extends State<TelaLogin> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: <Widget>[
-              const Text('Bem-vindo!', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
+              const Text(
+                'Bem-vindo!',
+                style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
+              ),
               const SizedBox(height: 30),
               // Campo E-mail
               TextFormField(
@@ -283,7 +353,9 @@ class _EstadoTelaLogin extends State<TelaLogin> {
                   border: OutlineInputBorder(),
                   prefixIcon: Icon(Icons.email),
                 ),
-                validator: (valor) => (valor == null || !valor.contains('@')) ? 'E-mail inválido.' : null,
+                validator: (valor) => (valor == null || !valor.contains('@'))
+                    ? 'E-mail inválido.'
+                    : null,
               ),
               const SizedBox(height: 16),
               // Campo Senha
@@ -295,21 +367,31 @@ class _EstadoTelaLogin extends State<TelaLogin> {
                   border: OutlineInputBorder(),
                   prefixIcon: Icon(Icons.lock),
                 ),
-                validator: (valor) => (valor == null || valor.length < 6) ? 'A senha deve ter 6+ caracteres.' : null,
+                validator: (valor) => (valor == null || valor.length < 6)
+                    ? 'A senha deve ter 6+ caracteres.'
+                    : null,
               ),
               const SizedBox(height: 20),
               // Mensagem de Erro
               if (_mensagemErro.isNotEmpty)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 10),
-                  child: Text(_mensagemErro, style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+                  child: Text(
+                    _mensagemErro,
+                    style: const TextStyle(
+                      color: Colors.red,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ),
               // Botão de Login
               ElevatedButton.icon(
                 onPressed: _fazerLogin,
                 icon: const Icon(Icons.login),
                 label: const Text('Entrar'),
-                style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 50)),
+                style: ElevatedButton.styleFrom(
+                  minimumSize: const Size(double.infinity, 50),
+                ),
               ),
               const SizedBox(height: 10),
               // Botão para Cadastrar
@@ -318,7 +400,9 @@ class _EstadoTelaLogin extends State<TelaLogin> {
                   // Navega para a tela de cadastro.
                   Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (context) => const TelaCadastro()),
+                    MaterialPageRoute(
+                      builder: (context) => const TelaCadastro(),
+                    ),
                   );
                 },
                 child: const Text('Não tem conta? Cadastre-se aqui.'),
@@ -329,6 +413,7 @@ class _EstadoTelaLogin extends State<TelaLogin> {
       ),
     );
   }
+
   // BOA PRÁTICA: Liberar os controladores
   @override
   void dispose() {
